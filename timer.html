@@ -1,0 +1,139 @@
+<div id="countdown-timer" style="font-family: Inter, Roboto, Arial, sans-serif; display:flex; flex-direction:column; align-items:center; gap:8px;">
+  <div id="display" style="
+        font-size:56px;
+        font-weight:700;
+        padding:18px 28px;
+        border-radius:12px;
+        box-shadow: 0 6px 18px rgba(0,0,0,0.12);
+        min-width:260px;
+        text-align:center;
+        background:linear-gradient(180deg, #ffffff, #f3f7ff);
+      ">40.0</div>
+
+  <div style="display:flex; gap:8px;">
+    <button id="start-btn" style="padding:8px 12px; border-radius:8px; font-size:14px;">Start</button>
+    <button id="pause-btn" style="padding:8px 12px; border-radius:8px; font-size:14px;">Pause</button>
+    <button id="reset-btn" style="padding:8px 12px; border-radius:8px; font-size:14px;">Reset</button>
+  </div>
+</div>
+
+<script>
+(function() {
+  const display = document.getElementById('display');
+  const startBtn = document.getElementById('start-btn');
+  const pauseBtn = document.getElementById('pause-btn');
+  const resetBtn = document.getElementById('reset-btn');
+
+  const DURATION = 40.0; 
+  let startTime = null;
+  let pausedAt = null;
+  let running = false;
+  let rafId = null;
+
+  function formatSeconds(sec) {
+    if (sec < 0) sec = 0;
+    return (Math.round(sec * 10) / 10).toFixed(1) + ' s';
+  }
+
+  function elapsedSeconds() {
+    if (!startTime) return pausedAt || 0;
+    return (performance.now() - startTime) / 1000 + (pausedAt || 0);
+  }
+
+  function remainingSeconds() {
+    return Math.max(0, DURATION - elapsedSeconds());
+  }
+
+function beep(duration = 150, frequency = 440, volume = 1) {
+  return new Promise(resolve => {
+    const context = new AudioContext();
+    const oscillator = context.createOscillator();
+    const gainNode = context.createGain();
+
+    oscillator.connect(gainNode);
+    gainNode.connect(context.destination);
+
+    oscillator.type = "sine";
+    oscillator.frequency.value = frequency;
+    gainNode.gain.value = volume;
+
+    oscillator.start();
+    setTimeout(() => {
+      oscillator.stop();
+      resolve();   // 声音结束
+    }, duration);
+  });
+}
+
+async function tick() {
+    const rem = remainingSeconds();
+    display.textContent = formatSeconds(rem);
+
+    if (rem <= 0) {
+      // === 👉 自动开始下一轮倒计时 ===
+      await beep(50, 990);
+      await beep(150, 440);
+      startNextRound();
+      return;
+    }
+
+    rafId = requestAnimationFrame(tick);
+  }
+
+  function startNextRound() {
+    // 恢复正常背景
+    display.style.background = 'linear-gradient(180deg, #ffffff, #f3f7ff)';
+    display.style.boxShadow = '0 6px 18px rgba(0,0,0,0.12)';
+    // 从零开始下一轮
+    startTime = performance.now();
+    pausedAt = 0;
+    rafId = requestAnimationFrame(tick);
+  }
+
+  function start() {
+    if (running) return;
+    running = true;
+    startBtn.disabled = true;
+    pauseBtn.disabled = false;
+    startTime = performance.now(); 
+    rafId = requestAnimationFrame(tick);
+  }
+
+  function pause() {
+    if (!running) return;
+    pausedAt = elapsedSeconds();
+    running = false;
+    startBtn.disabled = false;
+    pauseBtn.disabled = true;
+    if (rafId) cancelAnimationFrame(rafId);
+    rafId = null;
+  }
+
+  function reset() {
+    running = false;
+    startBtn.disabled = false;
+    pauseBtn.disabled = true;
+    if (rafId) cancelAnimationFrame(rafId);
+    rafId = null;
+    startTime = null;
+    pausedAt = 0;
+    display.textContent = DURATION.toFixed(1) + ' s';
+    display.style.background = 'linear-gradient(180deg, #ffffff, #f3f7ff)';
+    display.style.boxShadow = '0 6px 18px rgba(0,0,0,0.12)';
+  }
+
+  reset();
+  startBtn.addEventListener('click', start);
+  pauseBtn.addEventListener('click', pause);
+  resetBtn.addEventListener('click', reset);
+
+  document.addEventListener('keydown', function(e) {
+    if (e.code === 'Space') {
+      e.preventDefault();
+      if (running) pause(); else start();
+    } else if (e.key.toLowerCase() === 'r') {
+      reset();
+    }
+  });
+})();
+</script>

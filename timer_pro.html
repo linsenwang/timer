@@ -1,0 +1,473 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>康复训练助手</title>
+<style>
+  :root {
+    --primary: #2563eb;
+    --work-bg: linear-gradient(180deg, #ffffff, #f0f9ff);
+    --rest-bg: linear-gradient(180deg, #f0fdf4, #dcfce7); /* 绿色休息 */
+    --text-main: #1e293b;
+    --text-sub: #64748b;
+  }
+
+  body {
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    min-height: 100vh;
+    margin: 0;
+    background-color: #f1f5f9;
+  }
+
+  #workout-card {
+    background: white;
+    padding: 32px;
+    border-radius: 24px;
+    box-shadow: 0 10px 25px rgba(0,0,0,0.08);
+    width: 100%;
+    max-width: 360px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+    transition: all 0.3s ease;
+  }
+
+  /* 状态标签 */
+  #status-badge {
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    padding: 4px 12px;
+    border-radius: 20px;
+    background: #e2e8f0;
+    color: #475569;
+    margin-bottom: 12px;
+    font-weight: 700;
+  }
+
+  /* 动作名称 */
+  #exercise-name {
+    font-size: 24px;
+    font-weight: 700;
+    color: var(--text-main);
+    margin: 0;
+    line-height: 1.2;
+    min-height: 60px; /* 防止文字跳动 */
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  /* 动作侧边/备注 */
+  #exercise-detail {
+    font-size: 16px;
+    color: var(--primary);
+    font-weight: 600;
+    margin-top: 4px;
+    margin-bottom: 16px;
+    height: 24px;
+  }
+
+  /* 大计时器 */
+  #display {
+    font-size: 72px;
+    font-weight: 800;
+    font-variant-numeric: tabular-nums;
+    color: var(--text-main);
+    margin: 10px 0;
+    letter-spacing: -2px;
+  }
+
+  /* 进度条容器 */
+  .progress-container {
+    width: 100%;
+    height: 6px;
+    background: #e2e8f0;
+    border-radius: 3px;
+    margin-bottom: 24px;
+    overflow: hidden;
+  }
+  
+  #progress-bar {
+    height: 100%;
+    background: var(--primary);
+    width: 0%;
+    transition: width 0.3s ease;
+  }
+
+  #next-up {
+    font-size: 13px;
+    color: var(--text-sub);
+    margin-bottom: 24px;
+    height: 20px;
+  }
+
+  /* 控制区 */
+  .controls {
+    display: flex;
+    gap: 12px;
+    width: 100%;
+    justify-content: center;
+  }
+
+  button {
+    border: none;
+    padding: 12px 0;
+    border-radius: 12px;
+    font-size: 16px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: transform 0.1s, opacity 0.2s;
+    flex: 1;
+  }
+
+  button:active { transform: scale(0.96); }
+  button:disabled { opacity: 0.5; cursor: not-allowed; }
+
+  .btn-main { background: var(--primary); color: white; flex: 2; }
+  .btn-sec { background: #f1f5f9; color: var(--text-main); }
+  .btn-icon { flex: 0.8; font-size: 18px; }
+
+</style>
+</head>
+<body>
+
+<div id="workout-card">
+  <div id="status-badge">准备</div>
+  
+  <h2 id="exercise-name">康复训练</h2>
+  <div id="exercise-detail">点击开始</div>
+  
+  <div id="display">00.0</div>
+
+  <div class="progress-container">
+    <div id="progress-bar"></div>
+  </div>
+
+  <div id="next-up">下个动作: 股四头肌拉伸</div>
+
+  <div class="controls">
+    <button class="btn-sec btn-icon" id="prev-btn" title="上一个 (←)">⏮</button>
+    <button class="btn-main" id="toggle-btn" title="空格键">开始</button>
+    <button class="btn-sec btn-icon" id="skip-btn" title="跳过 (→)">⏭</button>
+  </div>
+  <div style="margin-top:12px; display:flex; gap:10px;">
+      <button id="reset-btn" style="background:transparent; color:#94a3b8; font-size:12px; padding:4px;">重置整个流程 (R)</button>
+  </div>
+</div>
+
+<script>
+(function() {
+  // === 1. 训练内容配置 (The Profile) ===
+  const WORK_TIME = 40; // 运动时间
+  const REST_TIME = 10; // 休息/换项时间
+  
+  // 基础动作列表
+  const exercises = [
+    { name: "股四头肌拉伸", side: "左侧" },
+    { name: "股四头肌拉伸", side: "右侧" },
+    { name: "胭绳肌拉伸", side: "左侧" },
+    { name: "胭绳肌拉伸", side: "右侧" },
+    { name: "ITB 髂胫束拉伸", side: "左侧" },
+    { name: "ITB 髂胫束拉伸", side: "右侧" },
+    { name: "小腿拉伸", side: "左侧" },
+    { name: "小腿拉伸", side: "右侧" },
+    { name: "蚌式开合", side: "左侧 (中臀肌)" },
+    { name: "蚌式开合", side: "右侧 (中臀肌)" },
+    { name: "靠墙静蹲", side: "双腿 (小角度)" }, // 静蹲通常做一组或两组，这里设为一组
+  ];
+
+  // 生成执行队列 (Action Queue)
+  // 将动作拆分为：[准备] -> [运动L] -> [休息] -> [运动R] -> [休息] ...
+  let queue = [];
+  
+  // 添加初始准备
+  queue.push({ type: 'prep', name: "准备开始", detail: "调整呼吸", duration: 5 });
+
+  exercises.forEach((ex, index) => {
+    // 添加运动环节
+    queue.push({
+      type: 'work',
+      name: ex.name,
+      detail: ex.side,
+      duration: WORK_TIME,
+      index: index + 1, // 当前第几个动作
+      total: exercises.length
+    });
+
+    // 添加休息环节 (除了最后一个动作后)
+    if (index < exercises.length - 1) {
+      const nextEx = exercises[index + 1];
+      queue.push({
+        type: 'rest',
+        name: "休息 / 换动作",
+        detail: `下个动作: ${nextEx.name} (${nextEx.side})`,
+        duration: REST_TIME
+      });
+    } else {
+        // 完成
+        queue.push({ type: 'finish', name: "训练完成", detail: "真棒！", duration: 0 });
+    }
+  });
+
+  // === 2. 状态管理 ===
+  let currentIndex = 0;
+  let timeLeft = queue[0].duration;
+  let isRunning = false;
+  let rafId = null;
+  let lastTime = null;
+  let audioCtx = null; // AudioContext
+
+  // DOM 元素
+  const dom = {
+    card: document.getElementById('workout-card'),
+    badge: document.getElementById('status-badge'),
+    name: document.getElementById('exercise-name'),
+    detail: document.getElementById('exercise-detail'),
+    display: document.getElementById('display'),
+    bar: document.getElementById('progress-bar'),
+    next: document.getElementById('next-up'),
+    toggle: document.getElementById('toggle-btn'),
+    skip: document.getElementById('skip-btn'),
+    prev: document.getElementById('prev-btn'),
+    reset: document.getElementById('reset-btn')
+  };
+
+  // === 3. 核心逻辑 ===
+
+  function updateUI() {
+    const step = queue[currentIndex];
+    
+    // 显示时间
+    dom.display.textContent = Math.max(0, timeLeft).toFixed(1);
+
+    // 状态样式
+    if (step.type === 'work') {
+      dom.card.style.background = 'white';
+      dom.badge.style.background = '#dbeafe'; // 蓝色淡
+      dom.badge.style.color = '#1e40af';
+      dom.badge.textContent = `动作 ${step.index} / ${step.total}`;
+      dom.display.style.color = '#1e293b';
+    } else if (step.type === 'rest') {
+      dom.card.style.background = '#f0fdf4'; // 绿色淡背景
+      dom.badge.style.background = '#bbf7d0';
+      dom.badge.style.color = '#166534';
+      dom.badge.textContent = '休息';
+      dom.display.style.color = '#15803d'; // 绿色数字
+    } else if (step.type === 'prep') {
+      dom.badge.textContent = '准备';
+    } else if (step.type === 'finish') {
+       dom.badge.textContent = '结束';
+       dom.card.style.background = '#fffbeb'; // 金色背景
+    }
+
+    // 文本内容
+    dom.name.textContent = step.name;
+    dom.detail.textContent = step.detail;
+
+    // 进度条
+    const progress = ((currentIndex) / (queue.length - 1)) * 100;
+    dom.bar.style.width = `${progress}%`;
+
+    // 下一个动作预览
+    let nextStepIndex = currentIndex + 1;
+    // 找下一个非休息的动作
+    while(nextStepIndex < queue.length && queue[nextStepIndex].type === 'rest') {
+        nextStepIndex++;
+    }
+    if (nextStepIndex < queue.length) {
+        dom.next.textContent = `Next: ${queue[nextStepIndex].name}`;
+    } else {
+        dom.next.textContent = '';
+    }
+
+    // 按钮状态
+    dom.toggle.textContent = isRunning ? "暂停" : (timeLeft === step.duration ? "开始" : "继续");
+    if (step.type === 'finish') dom.toggle.textContent = "结束";
+  }
+
+  function tick() {
+    if (!isRunning) return;
+
+    const now = performance.now();
+    const delta = (now - lastTime) / 1000;
+    lastTime = now;
+
+    if (timeLeft > 0) {
+      // 倒数声音提示
+      const prevTime = timeLeft;
+      timeLeft -= delta;
+      
+      // 在 3, 2, 1 秒时哔一声
+      if (Math.ceil(timeLeft) <= 3 && Math.ceil(prevTime) > Math.ceil(timeLeft) && timeLeft > 0) {
+        beep(100, 600, 0.5); // 短促高音
+      }
+
+      updateUI();
+      rafId = requestAnimationFrame(tick);
+    } else {
+      // 当前步骤结束
+      nextStep();
+    }
+  }
+
+  function nextStep() {
+    if (currentIndex >= queue.length - 1) {
+      // 彻底结束
+      isRunning = false;
+      playCompleteSound();
+      updateUI();
+      return;
+    }
+
+    currentIndex++;
+    const step = queue[currentIndex];
+    timeLeft = step.duration;
+    
+    // 声音提示
+    if (step.type === 'work') {
+      beep(400, 440, 1); // 这里的动作开始，低沉有力
+      speak(`${step.name}, ${step.detail}`);
+    } else if (step.type === 'rest') {
+      beep(200, 880, 0.5); // 休息开始，清脆
+      // 播报休息和下一个
+      speak(`休息一下。准备做：${queue[currentIndex+1].name}`);
+    }
+
+    updateUI();
+    // 自动继续
+    lastTime = performance.now();
+    rafId = requestAnimationFrame(tick);
+  }
+
+  function prevStep() {
+    pause();
+    if (currentIndex > 0) {
+      currentIndex--;
+      // 如果退回到休息，再退一步回到上一个动作
+      if (queue[currentIndex].type === 'rest' && currentIndex > 0) {
+          currentIndex--;
+      }
+      timeLeft = queue[currentIndex].duration;
+      updateUI();
+    }
+  }
+
+  function skipStep() {
+    // 手动跳过
+    pause();
+    if (currentIndex < queue.length - 1) {
+      currentIndex++;
+      // 如果跳到休息，再跳一步直接到下一个动作
+      if (queue[currentIndex].type === 'rest' && currentIndex < queue.length - 1) {
+          currentIndex++;
+      }
+      timeLeft = queue[currentIndex].duration;
+      updateUI();
+    }
+  }
+
+  function toggle() {
+    if (queue[currentIndex].type === 'finish') return;
+
+    // 初始化音频环境（浏览器需要用户交互才能播放声音）
+    if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    if (audioCtx.state === 'suspended') audioCtx.resume();
+
+    if (isRunning) {
+      pause();
+    } else {
+      start();
+    }
+  }
+
+  function start() {
+    isRunning = true;
+    lastTime = performance.now();
+    rafId = requestAnimationFrame(tick);
+    updateUI();
+  }
+
+  function pause() {
+    isRunning = false;
+    cancelAnimationFrame(rafId);
+    updateUI();
+  }
+
+  function reset() {
+    pause();
+    currentIndex = 0;
+    timeLeft = queue[0].duration;
+    updateUI();
+  }
+
+  // === 4. 音频与 TTS ===
+
+  function beep(duration, freq, vol) {
+    if (!audioCtx) return;
+    const osc = audioCtx.createOscillator();
+    const gain = audioCtx.createGain();
+    osc.connect(gain);
+    gain.connect(audioCtx.destination);
+    osc.frequency.value = freq;
+    gain.gain.value = vol;
+    osc.start();
+    setTimeout(() => {
+        // 平滑停止，防止爆音
+        gain.gain.exponentialRampToValueAtTime(0.00001, audioCtx.currentTime + 0.05);
+        osc.stop(audioCtx.currentTime + 0.05);
+    }, duration);
+  }
+
+  function playCompleteSound() {
+    if (!audioCtx) return;
+    // 简单的胜利和弦
+    [523.25, 659.25, 783.99, 1046.50].forEach((freq, i) => {
+        setTimeout(() => beep(300, freq, 0.5), i * 150);
+    });
+    speak("训练完成，做得好");
+  }
+
+  function speak(text) {
+    if ('speechSynthesis' in window) {
+        // 取消之前的语音，避免堆叠
+        window.speechSynthesis.cancel();
+        const msg = new SpeechSynthesisUtterance(text);
+        msg.lang = 'zh-CN';
+        msg.rate = 1.5; // 稍微快一点
+        window.speechSynthesis.speak(msg);
+    }
+  }
+
+  // === 5. 事件绑定 ===
+  dom.toggle.addEventListener('click', toggle);
+  dom.skip.addEventListener('click', skipStep);
+  dom.prev.addEventListener('click', prevStep);
+  dom.reset.addEventListener('click', reset);
+
+  // 键盘控制
+  document.addEventListener('keydown', (e) => {
+    if (e.code === 'Space') {
+      e.preventDefault();
+      toggle();
+    } else if (e.key === 'ArrowRight') {
+      skipStep();
+    } else if (e.key === 'ArrowLeft') {
+      prevStep();
+    } else if (e.key.toLowerCase() === 'r') {
+      reset();
+    }
+  });
+
+  // 初始化显示
+  updateUI();
+
+})();
+</script>
+</body>
+</html>
