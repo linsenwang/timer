@@ -19,7 +19,7 @@
     background-color: #f8fafc;
     height: 100vh;
     display: flex;
-    overflow: hidden; /* 防止整体滚动 */
+    overflow: hidden;
   }
 
   /* === 布局 === */
@@ -93,6 +93,10 @@
 
   .item-name { font-size: 14px; font-weight: 600; color: var(--text-main); }
   .item-time { font-size: 12px; color: var(--text-sub); }
+  
+  /* 标签样式 */
+  .badge { font-size: 10px; padding: 2px 6px; border-radius: 4px; margin-left: 5px; }
+  .badge-reps { background: #e0f2fe; color: #0284c7; }
 
   /* 主视图 */
   #main-view {
@@ -103,7 +107,6 @@
     justify-content: center;
     position: relative;
     padding: 20px;
-    /* background: linear-gradient(135deg, #f8fafc 0%, #e2e8f0 100%); */
   }
 
   /* 计时器卡片 */
@@ -118,7 +121,6 @@
     transition: transform 0.3s ease;
   }
 
-  /* 状态指示 */
   .status-tag {
     display: inline-block;
     padding: 6px 16px;
@@ -136,12 +138,20 @@
   #current-detail { font-size: 18px; color: var(--primary); font-weight: 500; min-height: 27px; }
 
   #display {
-    font-size: 96px;
+    font-size: 80px;
     font-weight: 800;
     font-variant-numeric: tabular-nums;
-    letter-spacing: -4px;
+    letter-spacing: -3px;
     margin: 10px 0;
     color: var(--text-main);
+    line-height: 1;
+  }
+  
+  #sub-display {
+    font-size: 16px;
+    color: #94a3b8;
+    height: 20px;
+    font-weight: 600;
   }
 
   .controls {
@@ -165,7 +175,6 @@
   .btn-primary { background: var(--text-main); color: white; flex: 2; }
   .btn-sec { background: #f1f5f9; color: var(--text-main); }
 
-  /* 移动端适配 */
   @media (max-width: 768px) {
     #app-container { flex-direction: column-reverse; }
     #sidebar { width: 100%; height: 40%; border-right: none; border-top: 1px solid #e2e8f0; }
@@ -179,25 +188,24 @@
 <body>
 
 <div id="app-container">
-  <!-- 左侧：播放列表与分类 -->
+  <!-- 左侧 -->
   <div id="sidebar">
     <div class="category-tabs">
       <button class="tab-btn" onclick="app.loadCategory('activation')">🔥 跑前激活</button>
       <button class="tab-btn active" onclick="app.loadCategory('stretch')">🧘 跑后拉伸</button>
       <button class="tab-btn" onclick="app.loadCategory('strength')">💪 力量强化</button>
     </div>
-    <div id="playlist">
-      <!-- JS 动态生成 -->
-    </div>
+    <div id="playlist"></div>
   </div>
 
-  <!-- 右侧：计时器 -->
+  <!-- 右侧 -->
   <div id="main-view">
     <div id="timer-card">
       <div id="status-tag" class="status-tag">准备</div>
       <h1 id="current-action">选择模式</h1>
       <div id="current-detail">点击左侧列表开始</div>
       <div id="display">00.0</div>
+      <div id="sub-display"></div> <!-- 显示倒计时/提示 -->
       
       <div class="controls">
         <button class="btn btn-sec" onclick="app.skip(-1)">⏮</button>
@@ -211,18 +219,21 @@
 
 <script>
 const app = (function() {
-  // === 数据配置 ===
+  // === 数据配置 (还原您的原始计划 + 修改侧抬腿) ===
   const DATA = {
-    // 1. 跑前激活 (动态，时间短，少休息)
+    // 1. 跑前激活
     activation: {
-      work: 30, rest: 5,
+      work: 30, rest: 3,
       items: [
-        { name: "蚌式开合", detail: "左侧" },
-        { name: "蚌式开合", detail: "右侧" },
+        // 修改：增加 mode:'reps', count:次数, interval:单次秒数
+        // 15次，每次2秒，共30秒
+        { name: "站姿侧抬腿", detail: "左侧", mode: 'reps', count: 15, interval: 1.2 },
+        { name: "站姿侧抬腿", detail: "右侧", mode: 'reps', count: 15, interval: 1.2 },
+        // 原始：
         { name: "靠墙静蹲", detail: "" },
       ]
     },
-    // 2. 跑后拉伸 (静态，时间长，中等休息)
+    // 2. 跑后拉伸 (原始数据)
     stretch: {
       work: 45, rest: 10,
       items: [
@@ -238,155 +249,152 @@ const app = (function() {
         { name: "比目鱼肌拉伸", detail: "右侧 (小腿后侧屈膝)" }
       ]
     },
-    // 3. 力量强化 (时间长，休息充足)
+    // 3. 力量强化 (原始数据)
     strength: {
       work: 50, rest: 15,
       items: [
-        { name: "靠墙静蹲 1", detail: "" },
-        { name: "靠墙静蹲 2", detail: "" },
-        { name: "靠墙静蹲 3", detail: "" },
+        { name: "靠墙静蹲", detail: "" },
+        { name: "靠墙静蹲", detail: "" },
+        { name: "靠墙静蹲", detail: "" },
       ]
     }
   };
 
   // === 状态变量 ===
   let currentCategory = 'stretch';
-  let queue = []; // 执行队列
-  let cursor = 0; // 当前队列索引
+  let queue = [];
+  let cursor = 0;
   let timeLeft = 0;
   let isRunning = false;
   let rafId = null;
   let lastTime = null;
   let audioCtx = null;
+  
+  // 专门用于Rep模式记录上一声滴是在第几次
+  let lastBeepRepIndex = 0;
 
-  // === DOM 引用 ===
+  // === DOM ===
   const els = {
     playlist: document.getElementById('playlist'),
     tabs: document.querySelectorAll('.tab-btn'),
     display: document.getElementById('display'),
+    subDisplay: document.getElementById('sub-display'),
     action: document.getElementById('current-action'),
     detail: document.getElementById('current-detail'),
     tag: document.getElementById('status-tag'),
     btnToggle: document.getElementById('toggle-btn')
   };
 
-  // === 初始化 ===
   function init() {
     loadCategory('activation');
     setupAudio();
   }
 
-  // === 核心逻辑：加载分类 ===
   function loadCategory(key) {
     currentCategory = key;
     
-    // 更新 Tab 样式
     els.tabs.forEach(t => t.classList.remove('active'));
-    // 简单粗暴找对应tab
-    const targetTab = Array.from(els.tabs).find(t => t.textContent.includes(key === 'activation' ? '激活' : key === 'stretch' ? '拉伸' : '强化'));
+    const targetTab = Array.from(els.tabs).find(t => t.innerText.includes(key==='activation'?'激活':key==='stretch'?'拉伸':'强化'));
     if(targetTab) targetTab.classList.add('active');
 
-    // 构建队列
-    // 结构: [Prep] -> [Work] -> [Rest] -> [Work] ... -> [Finish]
     const cfg = DATA[key];
     queue = [];
-    queue.push({ type: 'prep', name: '准备开始', detail: '调整呼吸', duration: 3, refIndex: -1 });
+    queue.push({ type: 'prep', name: '准备开始', detail: '调整呼吸', duration: 3 });
     
     cfg.items.forEach((item, idx) => {
-      // Work
+      // 这里的逻辑：如果是次数模式，时长由次数决定；否则由分类默认值决定
+      let duration = cfg.work;
+      let mode = 'time';
+      let count = 0, interval = 0;
+
+      if (item.mode === 'reps') {
+        mode = 'reps';
+        count = item.count;
+        interval = item.interval;
+        duration = count * interval; // 自动计算总时长
+      }
+
       queue.push({ 
         type: 'work', 
         name: item.name, 
         detail: item.detail, 
-        duration: cfg.work, 
-        refIndex: idx, // 对应侧边栏的索引
-        total: cfg.items.length 
+        duration: duration, 
+        refIndex: idx,
+        total: cfg.items.length,
+        mode: mode,
+        count: count,
+        interval: interval
       });
-      // Rest (最后一个动作后不需要休息，直接结束)
+
       if (idx < cfg.items.length - 1) {
         queue.push({ 
           type: 'rest', 
-          name: '休息 / 下一个', 
+          name: '休息', 
           detail: `Next: ${cfg.items[idx+1].name}`, 
           duration: cfg.rest,
-          refIndex: idx // 休息时高亮上一个完成的，或者下一个待办的？通常高亮即将进行的
+          refIndex: idx 
         });
       }
     });
     
-    queue.push({ type: 'finish', name: '训练完成', detail: 'Nice Work!', duration: 0, refIndex: -1 });
+    queue.push({ type: 'finish', name: '训练完成', detail: 'Nice Work!', duration: 0 });
 
-    // 重置状态
     cursor = 0;
     isRunning = false;
     timeLeft = queue[0].duration;
     cancelAnimationFrame(rafId);
-    
     renderPlaylist();
     renderUI();
   }
 
-  // === 核心逻辑：渲染播放列表 ===
   function renderPlaylist() {
     const items = DATA[currentCategory].items;
-    els.playlist.innerHTML = items.map((item, idx) => `
+    els.playlist.innerHTML = items.map((item, idx) => {
+      let extra = "";
+      if (item.mode === 'reps') {
+        extra = `<span class="badge badge-reps">${item.count}次</span>`;
+      }
+      return `
       <div class="playlist-item" id="pl-item-${idx}" onclick="app.jumpTo(${idx})">
         <div>
-          <div class="item-name">${idx + 1}. ${item.name}</div>
+          <div class="item-name">${idx + 1}. ${item.name} ${extra}</div>
           <div class="item-time">${item.detail}</div>
         </div>
-        <div style="font-size:12px; color:#cbd5e1">${DATA[currentCategory].work}s</div>
+        <div style="font-size:12px; color:#cbd5e1">${item.mode==='reps' ? (item.count*item.interval) : DATA[currentCategory].work}s</div>
       </div>
-    `).join('');
+    `}).join('');
   }
 
-  // === 核心逻辑：跳转与控制 ===
-  
-  // 点击侧边栏某一项
   function jumpTo(itemIndex) {
-    // 在队列中找到该 item 的 'work' 阶段
     const qIndex = queue.findIndex(q => q.type === 'work' && q.refIndex === itemIndex);
     if (qIndex !== -1) {
       cursor = qIndex;
       timeLeft = queue[cursor].duration;
-      // **关键需求**：手动点击直接开始，不要暂停
+      lastBeepRepIndex = 0; // 重置滴声计数
       if (!isRunning) start();
-      else lastTime = performance.now(); // 重置上一帧时间防止跳变
+      else lastTime = performance.now();
       
-      // 声音反馈
-      speak(queue[cursor].name + " " + queue[cursor].detail);
+      speak(queue[cursor].name);
       renderUI();
     }
   }
 
-  // 上一个/下一个 (Skip)
   function skip(direction) {
     let newCursor = cursor + direction;
+    if (direction === 1 && newCursor >= queue.length) return;
+    if (direction === -1 && newCursor < 0) return;
     
-    // 逻辑优化：手动跳过时，如果是休息，直接跳到下一个 Work；如果是Work，跳到休息
-    // 如果用户按 "Next" (direction=1)
-    if (direction === 1) {
-       // 防止越界
-       if (newCursor >= queue.length) return;
-       // 立即执行下一项
-       cursor = newCursor;
-       timeLeft = queue[cursor].duration;
-       if (!isRunning) start();
-    } 
-    // 如果用户按 "Prev"
-    else {
-      if (newCursor < 0) return;
-      // 如果当前是Work，往回跳通常是想重做上一个，或者回到上一个休息
-      // 简化逻辑：直接退一步
-      cursor = newCursor;
-      timeLeft = queue[cursor].duration;
-    }
-    renderUI();
+    cursor = newCursor;
+    timeLeft = queue[cursor].duration;
+    lastBeepRepIndex = 0; 
+    
+    if (direction === 1 && !isRunning) start(); 
+    else renderUI();
   }
 
   function toggle() {
     if (queue[cursor].type === 'finish') return;
-    initAudioContext(); // 确保音频解锁
+    initAudioContext(); // 必须在点击时触发
     if (isRunning) pause(); else start();
   }
 
@@ -408,7 +416,7 @@ const app = (function() {
     loadCategory(currentCategory);
   }
 
-  // === 计时循环 ===
+  // === 计时核心 ===
   function tick() {
     if (!isRunning) return;
     const now = performance.now();
@@ -416,25 +424,44 @@ const app = (function() {
     lastTime = now;
 
     if (timeLeft > 0) {
-      const prev = timeLeft;
+      const prevTime = timeLeft;
       timeLeft -= delta;
       
-      // 倒计时 3-2-1
-      if (Math.ceil(timeLeft) <= 3 && Math.ceil(prev) > Math.ceil(timeLeft) && timeLeft > 0) {
-        playBeep(600, 0.1); 
+      const step = queue[cursor];
+
+      // 1. 普通倒计时滴声 (最后3秒)
+      if (step.mode !== 'reps') {
+         if (Math.ceil(timeLeft) <= 3 && Math.ceil(prevTime) > Math.ceil(timeLeft) && timeLeft > 0) {
+            playBeep(600, 0.1); 
+         }
       }
       
+      // 2. 次数模式滴声 (按间隔)
+      if (step.type === 'work' && step.mode === 'reps') {
+         // 已经过去的时间
+         const elapsed = step.duration - timeLeft;
+         // 当前应该在第几个动作 (从1开始)
+         // 例如 interval=2. elapsed=0.1 -> 第1个; elapsed=2.1 -> 第2个
+         const currentRep = Math.floor(elapsed / step.interval) + 1;
+         
+         // 如果当前的 rep 编号变大了，说明进入了新的一次，滴一声
+         // 注意：刚开始(currentRep=1)的时候也要滴
+         if (currentRep > lastBeepRepIndex && currentRep <= step.count) {
+            lastBeepRepIndex = currentRep;
+            playBeep(880, 0.15); // 880Hz 更清脆，0.15s 更长一点
+         }
+      }
+
       renderUI();
       rafId = requestAnimationFrame(tick);
     } else {
-      // 环节结束，自动下一步
       autoNext();
     }
   }
 
   function autoNext() {
     if (cursor >= queue.length - 1) {
-      cursor = queue.length - 1; // 停在 finish
+      cursor = queue.length - 1;
       pause();
       playWin();
       renderUI();
@@ -444,74 +471,76 @@ const app = (function() {
     cursor++;
     const step = queue[cursor];
     timeLeft = step.duration;
-    
-    // 声音与提示
+    lastBeepRepIndex = 0;
+
+    // 语音播报
     if (step.type === 'work') {
-      playBeep(440, 0.3); // 开始动作
-      speak(step.name);
+      playBeep(440, 0.3);
+      speak(step.name + (step.mode==='reps' ? "，准备" : ""));
     } else if (step.type === 'rest') {
-      playBeep(880, 0.1); // 开始休息
-      speak("休息。下一个：" + queue[cursor+1].name);
+      playBeep(880, 0.1);
+      speak("休息");
     }
 
-    renderUI();
-    // 保持运行
     lastTime = performance.now();
     rafId = requestAnimationFrame(tick);
+    renderUI();
   }
 
   // === UI 渲染 ===
   function renderUI() {
     const step = queue[cursor];
     
-    // 1. 文本与颜色
-    els.display.innerText = Math.max(0.0, timeLeft).toFixed(1);
+    // 显示逻辑区分
+    if (step.type === 'work' && step.mode === 'reps') {
+       // 次数模式：显示次数
+       const currentRep = Math.max(1, Math.min(step.count, lastBeepRepIndex || 1));
+       els.display.innerText = `${currentRep} / ${step.count}`;
+       els.subDisplay.innerText = "跟随节奏";
+    } else {
+       // 时间模式：显示秒数
+       els.display.innerText = Math.max(0.0, timeLeft).toFixed(1);
+       els.subDisplay.innerText = "";
+    }
+
     els.action.innerText = step.name;
     els.detail.innerText = step.detail;
-    els.btnToggle.innerText = isRunning ? "暂停 (Space)" : (step.type === 'finish' ? "结束" : "开始");
+    els.btnToggle.innerText = isRunning ? "暂停" : (step.type === 'finish' ? "结束" : "开始");
     
-    // 2. 状态样式
-    document.body.style.background = step.type === 'rest' ? '#f0fdf4' : '#f8fafc'; // 休息时全屏变绿
+    document.body.style.background = step.type === 'rest' ? '#f0fdf4' : '#f8fafc';
+    
     if (step.type === 'work') {
       els.tag.className = 'status-tag work';
-      els.tag.innerText = `进行中 ${step.refIndex+1}/${step.total}`;
+      els.tag.innerText = `训练中 ${step.refIndex+1}/${step.total}`;
       els.display.style.color = '#0f172a';
     } else if (step.type === 'rest') {
       els.tag.className = 'status-tag rest';
-      els.tag.innerText = '休息 / 换动作';
+      els.tag.innerText = 'Rest';
       els.display.style.color = '#166534';
     } else {
       els.tag.className = 'status-tag';
-      els.tag.innerText = step.type === 'prep' ? '准备' : '完成';
+      els.tag.innerText = step.type === 'prep' ? 'Ready' : 'Done';
+      els.display.style.color = '#0f172a';
     }
 
-    // 3. 侧边栏高亮
-    // 清除旧的
     document.querySelectorAll('.playlist-item').forEach(d => {
-        d.classList.remove('active');
-        d.classList.remove('done');
+        d.classList.remove('active'); d.classList.remove('done');
     });
     
-    // 高亮当前
-    // 如果是 Rest，我们高亮下一个动作作为预告？还是保持上一个？
-    // 逻辑：如果是 Work，高亮当前 refIndex。如果是 Rest，也可以高亮下一个(cursor+1)的 refIndex
     let targetIdx = -1;
     if (step.type === 'work') targetIdx = step.refIndex;
-    else if (step.type === 'rest') targetIdx = queue[cursor+1].refIndex;
+    else if (step.type === 'rest') targetIdx = queue[cursor+1]?.refIndex;
     
-    if (targetIdx !== -1) {
+    if (targetIdx !== undefined && targetIdx !== -1) {
        const el = document.getElementById(`pl-item-${targetIdx}`);
        if (el) {
            el.classList.add('active');
-           // 确保滚动可见
            el.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
        }
-    }
-    
-    // 标记已完成
-    for(let i=0; i<targetIdx; i++) {
-        const el = document.getElementById(`pl-item-${i}`);
-        if(el) el.classList.add('done');
+       for(let i=0; i<targetIdx; i++) {
+          const prev = document.getElementById(`pl-item-${i}`);
+          if(prev) prev.classList.add('done');
+       }
     }
   }
 
@@ -532,14 +561,18 @@ const app = (function() {
     osc.connect(gain);
     gain.connect(audioCtx.destination);
     osc.frequency.value = freq;
+    
+    // 增加音量 (0.5比之前的0.1大很多)
+    gain.gain.setValueAtTime(1, audioCtx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + dur);
+    
     osc.start();
-    gain.gain.exponentialRampToValueAtTime(0.00001, audioCtx.currentTime + dur);
     osc.stop(audioCtx.currentTime + dur);
   }
 
   function playWin() {
     if (!audioCtx) return;
-    [400, 500, 600, 800].forEach((f, i) => setTimeout(() => playBeep(f, 0.2), i*150));
+    [400, 600, 800].forEach((f, i) => setTimeout(() => playBeep(f, 0.2), i*150));
     speak("训练完成");
   }
 
@@ -553,7 +586,6 @@ const app = (function() {
     }
   }
 
-  // === 键盘监听 ===
   document.addEventListener('keydown', (e) => {
     if (e.code === 'Space') { e.preventDefault(); toggle(); }
     else if (e.code === 'ArrowRight') skip(1);
@@ -561,10 +593,8 @@ const app = (function() {
     else if (e.key.toLowerCase() === 'r') reset();
   });
 
-  // 启动
   init();
 
-  // 暴露给 HTML 的接口
   return { loadCategory, jumpTo, toggle, skip, reset };
 })();
 </script>
