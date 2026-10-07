@@ -220,6 +220,8 @@
   </div>
 </div>
 
+<!-- 训练计划都写在 config.js 里，改计划不用动本文件 -->
+<script src="./config.js"></script>
 <script>
 let wakeLock = null;
 async function keepAwake() {
@@ -241,11 +243,8 @@ document.addEventListener('visibilitychange', async () => {
 });
 
 const app = (function() {
-  // === 训练计划来自 ./config.json，改计划不用动这个文件 ===
-  const CONFIG_URL = './config.json';
-
   // === 状态变量 ===
-  let config = null;        // config.json 的解析结果
+  let config = null;        // config.js 里的 TIMER_CONFIG
   let DATA = null;          // 由 config.categories 转成 { key: 分类 } 便于查表
   let currentCategory = null;
   let queue = [];
@@ -303,14 +302,12 @@ const app = (function() {
     return out;
   }
 
-  async function init() {
+  function init() {
     setupAudio();
-    try {
-      const res = await fetch(CONFIG_URL, { cache: 'no-cache' });
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      config = await res.json();
-    } catch (err) {
-      showConfigError(err);
+
+    config = window.TIMER_CONFIG;
+    if (!config || !Array.isArray(config.categories) || !config.categories.length) {
+      showConfigError(new Error('config.js 没加载成功，或者格式不对'));
       return;
     }
 
@@ -326,7 +323,7 @@ const app = (function() {
     loadCategory(DATA[first] ? first : config.categories[0].key);
   }
 
-  // 分类按钮完全由 config.json 的 categories 生成
+  // 分类按钮完全由 config.js 的 categories 生成
   function renderTabs() {
     els.tabsEl.innerHTML = config.categories.map(c =>
       `<button class="tab-btn" data-key="${c.key}">${c.icon ? c.icon + ' ' : ''}${c.label || c.key}</button>`
@@ -336,12 +333,12 @@ const app = (function() {
   }
 
   function showConfigError(err) {
-    console.error('config.json 加载失败:', err);
+    console.error('config.js 加载失败:', err);
     els.tag.className = 'status-tag';
     els.tag.innerText = 'Error';
     els.action.innerText = '配置加载失败';
     els.detail.innerText = String(err && err.message ? err.message : err);
-    els.subDisplay.innerText = '检查 config.json 是否存在且为合法 JSON';
+    els.subDisplay.innerText = '检查 config.js 是否存在、语法是否正确';
   }
 
   function loadCategory(key) {

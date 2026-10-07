@@ -1,11 +1,11 @@
-const CACHE_NAME = 'running-timer-v2';
+const CACHE_NAME = 'running-timer-v3';
 
 // 全是相对路径：本站点在 /timer/ 下，'./' 指的就是 /timer/
 const STATIC_ASSETS = [
   './',
   './index.html',
   './manifest.json',
-  './config.json',
+  './config.js',
   './favicon.png',
   './icon-192.png',
   './icon-512.png',
@@ -48,8 +48,8 @@ self.addEventListener('fetch', (event) => {
   const url = new URL(req.url);
   if (url.origin !== self.location.origin) return;
 
-  // 页面本身与 config.json 走网络优先：改完配置刷新一次就能生效，离线时回落到缓存
-  if (req.mode === 'navigate' || url.pathname.endsWith('/config.json')) {
+  // 页面本身与 config.js 走网络优先：改完配置刷新一次就能生效，离线时回落到缓存
+  if (req.mode === 'navigate' || url.pathname.endsWith('/config.js')) {
     event.respondWith(networkFirst(req));
   } else {
     event.respondWith(cacheFirst(req));
