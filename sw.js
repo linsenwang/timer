@@ -1,62 +1,96 @@
-const CACHE_NAME = 'running-timer-v1';
+const CACHE_NAME = 'running-timer-v2';
+
+// 全是相对路径：本站点在 /timer/ 下，'./' 指的就是 /timer/
 const STATIC_ASSETS = [
-  '/',
-  '/index.html',
-  '/favicon.png',
-  '/back.svg',
-  '/forward.svg'
+  './',
+  './index.html',
+  './manifest.json',
+  './config.json',
+  './favicon.png',
+  './icon-192.png',
+  './icon-512.png',
+  './back.svg',
+  './forward.svg'
 ];
 
-// 安装时缓存静态资源
+// 安装时逐个缓存，某个文件 404 不会让整批缓存失败
 self.addEventListener('install', (event) => {
-  event.waitUntil(
-    caches.open(CACHE_NAME).then((cache) => {
-      return cache.addAll(STATIC_ASSETS);
-    }).catch((err) => {
-      console.log('Cache install failed:', err);
-    })
-  );
+  event.waitUntil((async () => {
+    const cache = await caches.open(CACHE_NAME);
+    await Promise.all(STATIC_ASSETS.map(async (url) => {
+      try {
+        await cache.add(url);
+      } catch (err) {
+        console.log('缓存失败:', url, err);
+      }
+    }));
+  })());
   self.skipWaiting();
 });
 
-// 激活时清理旧缓存
+// 激活时清理旧版本缓存
 self.addEventListener('activate', (event) => {
   event.waitUntil(
-    caches.keys().then((cacheNames) => {
-      return Promise.all(
-        cacheNames
+    caches.keys()
+      .then((names) => Promise.all(
+        names
           .filter((name) => name !== CACHE_NAME)
           .map((name) => caches.delete(name))
-      );
-    })
+      ))
+      .then(() => self.clients.claim())
   );
-  self.clients.claim();
 });
 
-// 拦截请求，优先从缓存读取
 self.addEventListener('fetch', (event) => {
-  event.respondWith(
-    caches.match(event.request).then((cached) => {
-      // 如果缓存中有，返回缓存
-      if (cached) {
-        return cached;
-      }
-      // 否则发起网络请求
-      return fetch(event.request).then((response) => {
-        // 只缓存成功的 GET 请求
-        if (!response || response.status !== 200 || response.type !== 'basic' || event.request.method !== 'GET') {
-          return response;
-        }
-        // 克隆响应（因为 response 只能使用一次）
-        const responseToCache = response.clone();
-        caches.open(CACHE_NAME).then((cache) => {
-          cache.put(event.request, responseToCache);
-        });
-        return response;
-      });
-    }).catch(() => {
-      // 离线且缓存中没有时，返回离线页面或失败
-      return new Response('Offline');
-    })
-  );
+  const req = event.request;
+  if (req.method !== 'GET') return;
+
+  const url = new URL(req.url);
+  if (url.origin !== self.location.origin) return;
+
+  // 页面本身与 config.json 走网络优先：改完配置刷新一次就能生效，离线时回落到缓存
+  if (req.mode === 'navigate' || url.pathname.endsWith('/config.json')) {
+    event.respondWith(networkFirst(req));
+  } else {
+    event.respondWith(cacheFirst(req));
+  }
 });
+
+async function networkFirst(req) {
+  const cache = await caches.open(CACHE_NAME);
+  try {
+    const res = await fetch(req, { cache: 'no-cache' });
+    if (res && res.status === 200 && res.type === 'basic') {
+      cache.put(req, res.clone());
+    }
+    return res;
+  } catch (err) {
+    const cached = (await cache.match(req, { ignoreSearch: true }))
+      || (await cache.match('./index.html'))
+      || (await cache.match('./'));
+    if (cached) return cached;
+    return offlineResponse();
+  }
+}
+
+async function cacheFirst(req) {
+  const cached = await caches.match(req);
+  if (cached) return cached;
+  try {
+    const res = await fetch(req);
+    if (res && res.status === 200 && res.type === 'basic') {
+      const cache = await caches.open(CACHE_NAME);
+      cache.put(req, res.clone());
+    }
+    return res;
+  } catch (err) {
+    return offlineResponse();
+  }
+}
+
+function offlineResponse() {
+  return new Response('离线且无缓存', {
+    status: 503,
+    headers: { 'Content-Type': 'text/plain; charset=utf-8' }
+  });
+}

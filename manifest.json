@@ -3,12 +3,12 @@
   "short_name": "timer",
   "description": "跑步训练计时器 - 跑前激活、跑后拉伸、力量强化",
   "id": "timer",
-  "start_url": "/",
+  "start_url": "./",
   "display": "standalone",
   "background_color": "#f8fafc",
   "theme_color": "#3b82f6",
   "orientation": "portrait",
-  "scope": "/",
+  "scope": "./",
   "icons": [
     {
       "src": "./favicon.png",

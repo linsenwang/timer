@@ -197,11 +197,7 @@
 <div id="app-container">
   <!-- 左侧 -->
   <div id="sidebar">
-    <div class="category-tabs">
-      <button class="tab-btn" onclick="app.loadCategory('activation')">🔥 跑前激活</button>
-      <button class="tab-btn active" onclick="app.loadCategory('stretch')">🧘 跑后拉伸</button>
-      <button class="tab-btn" onclick="app.loadCategory('strength')">💪 力量强化</button>
-    </div>
+    <div class="category-tabs" id="category-tabs"></div>
     <div id="playlist"></div>
   </div>
 
@@ -245,52 +241,13 @@ document.addEventListener('visibilitychange', async () => {
 });
 
 const app = (function() {
-  // === 数据配置 (还原您的原始计划 + 修改侧抬腿) ===
-  const DATA = {
-    // 1. 跑前激活
-    activation: {
-      work: 30, rest: 3,
-      items: [
-        // 修改：增加 mode:'reps', count:次数, interval:单次秒数
-        // 15次，每次2秒，共30秒
-        { name: "站姿侧抬腿", detail: "左侧", mode: 'reps', count: 15, interval: 1.2 },
-        { name: "站姿侧抬腿", detail: "右侧", mode: 'reps', count: 15, interval: 1.2 },
-        // 原始：
-        { name: "靠墙静蹲", detail: "" },
-      ]
-    },
-    // 2. 跑后拉伸 (原始数据)
-    stretch: {
-      work: 45, rest: 10,
-      items: [
-        { name: "股四头肌拉伸", detail: "左侧 (大腿前侧)" },
-        { name: "股四头肌拉伸", detail: "右侧 (大腿前侧)" },
-        { name: "胭绳肌拉伸", detail: "左侧 (大腿后侧)" },
-        { name: "胭绳肌拉伸", detail: "右侧 (大腿后侧)" },
-        { name: "ITB 髂胫束", detail: "左侧 (双脚交叉)" },
-        { name: "ITB 髂胫束", detail: "右侧 (双脚交叉)" },
-        { name: "腓肠肌拉伸", detail: "左侧 (小腿后侧直腿)" },
-        { name: "腓肠肌拉伸", detail: "右侧 (小腿后侧直腿)" },
-        { name: "比目鱼肌拉伸", detail: "左侧 (小腿后侧屈膝)" },
-        { name: "比目鱼肌拉伸", detail: "右侧 (小腿后侧屈膝)" }
-      ]
-    },
-    // 3. 力量强化 (原始数据)
-    strength: {
-      work: 50, rest: 15,
-      items: [
-        { name: "靠墙静蹲", detail: "" },
-        { name: "靠墙静蹲", detail: "" },
-        { name: "靠墙静蹲", detail: "" },
-        { name: "靠墙静蹲", detail: "" },
-        { name: "靠墙静蹲", detail: "" },
-        { name: "靠墙静蹲", detail: "" },
-      ]
-    }
-  };
+  // === 训练计划来自 ./config.json，改计划不用动这个文件 ===
+  const CONFIG_URL = './config.json';
 
   // === 状态变量 ===
-  let currentCategory = 'stretch';
+  let config = null;        // config.json 的解析结果
+  let DATA = null;          // 由 config.categories 转成 { key: 分类 } 便于查表
+  let currentCategory = null;
   let queue = [];
   let cursor = 0;
   let timeLeft = 0;
@@ -305,7 +262,8 @@ const app = (function() {
   // === DOM ===
   const els = {
     playlist: document.getElementById('playlist'),
-    tabs: document.querySelectorAll('.tab-btn'),
+    tabsEl: document.getElementById('category-tabs'),
+    tabs: [],
     display: document.getElementById('display'),
     subDisplay: document.getElementById('sub-display'),
     action: document.getElementById('current-action'),
@@ -314,25 +272,64 @@ const app = (function() {
     btnToggle: document.getElementById('toggle-btn')
   };
 
-  function init() {
-    loadCategory('strength');
+  // 单项时长：次数模式 = 次数 × 间隔；否则用 item.duration，未写则取分类的 work
+  function durationOf(item, cfg) {
+    if (item.mode === 'reps') return item.count * item.interval;
+    return item.duration != null ? item.duration : cfg.work;
+  }
+
+  async function init() {
     setupAudio();
+    try {
+      const res = await fetch(CONFIG_URL, { cache: 'no-cache' });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      config = await res.json();
+    } catch (err) {
+      showConfigError(err);
+      return;
+    }
+
+    DATA = {};
+    config.categories.forEach(c => { DATA[c.key] = c; });
+    if (config.appTitle) document.title = config.appTitle;
+
+    renderTabs();
+    const first = config.defaultCategory;
+    loadCategory(DATA[first] ? first : config.categories[0].key);
+  }
+
+  // 分类按钮完全由 config.json 的 categories 生成
+  function renderTabs() {
+    els.tabsEl.innerHTML = config.categories.map(c =>
+      `<button class="tab-btn" data-key="${c.key}">${c.icon ? c.icon + ' ' : ''}${c.label || c.key}</button>`
+    ).join('');
+    els.tabs = Array.from(els.tabsEl.querySelectorAll('.tab-btn'));
+    els.tabs.forEach(tab => tab.addEventListener('click', () => loadCategory(tab.dataset.key)));
+  }
+
+  function showConfigError(err) {
+    console.error('config.json 加载失败:', err);
+    els.tag.className = 'status-tag';
+    els.tag.innerText = 'Error';
+    els.action.innerText = '配置加载失败';
+    els.detail.innerText = String(err && err.message ? err.message : err);
+    els.subDisplay.innerText = '检查 config.json 是否存在且为合法 JSON';
   }
 
   function loadCategory(key) {
+    if (!DATA || !DATA[key]) return;
     currentCategory = key;
     
-    els.tabs.forEach(t => t.classList.remove('active'));
-    const targetTab = Array.from(els.tabs).find(t => t.innerText.includes(key==='activation'?'激活':key==='stretch'?'拉伸':'强化'));
-    if(targetTab) targetTab.classList.add('active');
+    els.tabs.forEach(t => t.classList.toggle('active', t.dataset.key === currentCategory));
 
     const cfg = DATA[key];
     queue = [];
-    queue.push({ type: 'prep', name: '准备开始', detail: '调整呼吸', duration: 3 });
+    const prep = Object.assign({ name: '准备开始', detail: '调整呼吸', duration: 3 }, config.prep);
+    queue.push({ type: 'prep', name: prep.name, detail: prep.detail, duration: prep.duration });
     
     cfg.items.forEach((item, idx) => {
-      // 这里的逻辑：如果是次数模式，时长由次数决定；否则由分类默认值决定
-      let duration = cfg.work;
+      // 如果是次数模式，时长由次数决定；否则由分类 work（或单项 duration）决定
+      let duration = durationOf(item, cfg);
       let mode = 'time';
       let count = 0, interval = 0;
 
@@ -340,7 +337,6 @@ const app = (function() {
         mode = 'reps';
         count = item.count;
         interval = item.interval;
-        duration = count * interval; // 自动计算总时长
       }
 
       queue.push({ 
@@ -389,7 +385,7 @@ const app = (function() {
           <div class="item-name">${idx + 1}. ${item.name} ${extra}</div>
           <div class="item-time">${item.detail}</div>
         </div>
-        <div style="font-size:12px; color:#cbd5e1">${item.mode==='reps' ? (item.count*item.interval) : DATA[currentCategory].work}s</div>
+        <div style="font-size:12px; color:#cbd5e1">${durationOf(item, DATA[currentCategory])}s</div>
       </div>
     `}).join('');
   }
@@ -422,7 +418,7 @@ const app = (function() {
   }
 
   function toggle() {
-    if (queue[cursor].type === 'finish') return;
+    if (!queue.length || queue[cursor].type === 'finish') return;
     initAudioContext(); // 必须在点击时触发
     if (isRunning) pause(); else start();
   }
