@@ -278,6 +278,21 @@ const app = (function() {
     return item.duration != null ? item.duration : cfg.work;
   }
 
+  // repeat: N 把一条动作展开成连续 N 条，省得在配置里写 N 遍
+  function expandItems(items) {
+    const out = [];
+    (items || []).forEach(item => {
+      let times = Math.floor(item.repeat);
+      if (!(times > 0)) times = 1;
+      for (let i = 0; i < times; i++) {
+        const one = Object.assign({}, item);
+        delete one.repeat;
+        out.push(one);
+      }
+    });
+    return out;
+  }
+
   async function init() {
     setupAudio();
     try {
@@ -290,7 +305,10 @@ const app = (function() {
     }
 
     DATA = {};
-    config.categories.forEach(c => { DATA[c.key] = c; });
+    config.categories.forEach(c => {
+      c.items = expandItems(c.items);
+      DATA[c.key] = c;
+    });
     if (config.appTitle) document.title = config.appTitle;
 
     renderTabs();

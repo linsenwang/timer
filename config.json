@@ -45,12 +45,7 @@
       "work": 50,
       "rest": 15,
       "items": [
-        { "name": "靠墙静蹲", "detail": "" },
-        { "name": "靠墙静蹲", "detail": "" },
-        { "name": "靠墙静蹲", "detail": "" },
-        { "name": "靠墙静蹲", "detail": "" },
-        { "name": "靠墙静蹲", "detail": "" },
-        { "name": "靠墙静蹲", "detail": "" }
+        { "name": "靠墙静蹲", "detail": "", "repeat": 6 }
       ]
     }
   ]
