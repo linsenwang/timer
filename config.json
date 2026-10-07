@@ -14,8 +14,8 @@
       "work": 30,
       "rest": 3,
       "items": [
-        { "name": "站姿侧抬腿", "detail": "左侧", "mode": "reps", "count": 15, "interval": 1.2 },
-        { "name": "站姿侧抬腿", "detail": "右侧", "mode": "reps", "count": 15, "interval": 1.2 },
+        { "name": "站姿侧抬腿", "detail": "左侧", "reps": 15, "interval": 1.2 },
+        { "name": "站姿侧抬腿", "detail": "右侧", "reps": 15, "interval": 1.2 },
         { "name": "靠墙静蹲", "detail": "" }
       ]
     },
@@ -45,7 +45,7 @@
       "work": 50,
       "rest": 15,
       "items": [
-        { "name": "靠墙静蹲", "detail": "", "repeat": 6 }
+        { "name": "靠墙静蹲", "detail": "", "sets": 6 }
       ]
     }
   ]

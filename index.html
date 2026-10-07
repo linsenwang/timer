@@ -272,23 +272,33 @@ const app = (function() {
     btnToggle: document.getElementById('toggle-btn')
   };
 
-  // 单项时长：次数模式 = 次数 × 间隔；否则用 item.duration，未写则取分类的 work
+  // 单项时长：写了 reps 就按次数算（reps × interval），否则用 item.duration，未写则取分类的 work
   function durationOf(item, cfg) {
     if (item.mode === 'reps') return item.count * item.interval;
     return item.duration != null ? item.duration : cfg.work;
   }
 
-  // repeat: N 把一条动作展开成连续 N 条，省得在配置里写 N 遍
+  // 配置里的一条动作 -> 内部结构。配置字段：
+  //   reps     每组做几次，配合 interval（每下几秒）；写了就不按秒计时
+  //   duration 按秒计时时这一条的秒数，不写就用所属分类的 work
+  //   sets     这条动作整组重复几次，组间休息用所属分类的 rest
+  function normalizeItem(item) {
+    const reps = Number(item.reps) > 0 ? Number(item.reps) : 0;
+    return Object.assign({}, item, {
+      mode: reps ? 'reps' : 'time',
+      count: reps,
+      interval: reps ? (Number(item.interval) > 0 ? Number(item.interval) : 1) : 0
+    });
+  }
+
+  // sets: N 把一条动作展开成连续 N 条，省得在配置里写 N 遍
   function expandItems(items) {
     const out = [];
     (items || []).forEach(item => {
-      let times = Math.floor(item.repeat);
+      const one = normalizeItem(item);
+      let times = Math.floor(item.sets);
       if (!(times > 0)) times = 1;
-      for (let i = 0; i < times; i++) {
-        const one = Object.assign({}, item);
-        delete one.repeat;
-        out.push(one);
-      }
+      for (let i = 0; i < times; i++) out.push(Object.assign({}, one));
     });
     return out;
   }
