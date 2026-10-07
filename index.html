@@ -25,7 +25,6 @@
     --page-bg-rest: #f0fdf4;
     --item-hover: #f8fafc;
     --item-time: #cbd5e1;
-    --active-border: #bfdbfe;
     --text-faint: #94a3b8;
     --display-work: #0f172a;
     --display-rest: #166534;
@@ -56,7 +55,6 @@
   #sidebar {
     width: var(--sidebar-w);
     background: white;
-    border-right: 1px solid #e2e8f0;
     display: flex;
     flex-direction: column;
     z-index: 10;
@@ -73,7 +71,6 @@
     flex: 1;
     padding: 8px 4px;
     font-size: 12px;
-    border: 1px solid #e2e8f0;
     background: #f1f5f9;
     border-radius: 6px;
     cursor: pointer;
@@ -83,7 +80,6 @@
   .tab-btn.active {
     background: var(--primary);
     color: white;
-    border-color: var(--primary);
   }
 
   #playlist {
@@ -97,7 +93,6 @@
     margin-bottom: 6px;
     border-radius: 8px;
     cursor: pointer;
-    border: 1px solid transparent;
     display: flex;
     justify-content: space-between;
     align-items: center;
@@ -108,7 +103,6 @@
   
   .playlist-item.active {
     background: var(--active-bg);
-    border-color: #bfdbfe;
   }
   
   .playlist-item.done { opacity: 0.5; }
@@ -199,7 +193,7 @@
 
   @media (max-width: 768px) {
     #app-container { flex-direction: column-reverse; }
-    #sidebar { width: 100%; height: 40%; border-right: none; border-top: 1px solid #e2e8f0; }
+    #sidebar { width: 100%; height: 40%; }
     #main-view { height: 60%; }
     #timer-card { padding: 20px; box-shadow: none; background: transparent; }
     #display { font-size: 72px; }
@@ -217,35 +211,28 @@
       --page-bg-rest: #052e16;
       --item-hover: #334155;
       --item-time: #64748b;
-      --active-border: #3b82f6;
       --text-faint: #64748b;
       --display-work: #f1f5f9;
       --display-rest: #86efac;
       --icon-filter: brightness(0) invert(1);
     }
 
-    #sidebar {
-      background: #1e293b;
-      border-color: #334155;
-    }
+    #sidebar { background: #1e293b; }
 
     .category-tabs { background: #1e293b; }
 
     .tab-btn {
       background: #334155;
-      border-color: #334155;
       color: #cbd5e1;
     }
     .tab-btn.active {
       background: var(--primary);
-      border-color: var(--primary);
       color: #fff;
     }
 
     .playlist-item:hover { background: var(--item-hover); }
     .playlist-item.active {
       background: var(--active-bg);
-      border-color: var(--active-border);
     }
 
     /* 只有桌面端有卡片底色，窄屏本来就是透明的，所以这里也限定宽度 */
